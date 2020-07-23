@@ -5,6 +5,6 @@ Changelog
 Version 0.1
 ===========
 
-- Feature A added
-- FIX: nasty bug #1729 fixed
-- add your changes here!
+- Concha initial commit.
+- Production prediction based on day of week, weather
+- Models implemented: ProfitMaximizer, QuantileRegressor, Mean, MeanWeekPart

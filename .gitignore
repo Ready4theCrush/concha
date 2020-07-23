@@ -11,7 +11,7 @@
 __pycache__/*
 .cache/*
 .*.swp
-*/.ipynb_checkpoints/*
+**/.ipynb_checkpoints/**
 .DS_Store
 
 # Project files
@@ -27,6 +27,7 @@ tags
 *.eggs/
 .installed.cfg
 *.egg-info
+*.egg-info/
 
 # Unittest and coverage
 htmlcov/*
@@ -48,3 +49,9 @@ MANIFEST
 
 # Per-project virtualenvs
 .venv*/
+
+planners/*
+!planners/example/*
+
+# Internal notebooks
+**/notebooks/internal/**
