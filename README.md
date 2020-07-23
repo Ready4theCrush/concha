@@ -9,7 +9,7 @@ Cafes, grocery stores, restaurants, donut shops, and panaderias face a fundament
  
  Concha uses data tracked by the point of sale service (Toast, Square, Clover, etc),
    combined with the day of the week and local weather conditions to learn demand patterns.
-   Then it predicts how much of each product to make in order to maximize profit.
+   Then it predicts how much to make of each product to maximize profit.
 ### Why?
 If we knew how much people wanted to buy, the _demand_, this problem would be easy.
  But we don't, demand is random: it can't be known exactly. But we do know
