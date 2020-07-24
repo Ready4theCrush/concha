@@ -267,14 +267,20 @@ performance using the "ProfitMaximizer" deep learning model.
     ```python
     from concha import Planner
   
-    sim_planner = Planner(planner_name="sim_cafe", batch_size=8, batch_cost=24.0, unit_sale_price=4.75)
+    sim_planner = Planner(
+        planner_name="sim_cafe",
+        batch_size=8,
+        batch_cost=24.0,
+        unit_sale_price=4.75
+    )
+    
     sim_planner.simulate_history(
         num_days=180,
         stockout_prob=0.5,
         demand_mean=100,
         demand_std=10,
         num_products=5
-   )  
+    )  
     ```
 2. We can run a five fold cross validation on the simulated data to see the 
 effective performance of each product. 
