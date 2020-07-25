@@ -52,11 +52,11 @@ all the package versions line up.
 3. Open up a [conda prompt](https://docs.anaconda.com/anaconda/install/verify-install/#:~:text=Windows%3A%20Click%20Start%2C%20search%2C,Applications%20%2D%20System%20Tools%20%2D%20terminal.).
  (I realize "conda" and "concha" sound very similiar, sorry!) Then navigate to the concha directory:
     ```
-   cd [path_to_concha]/concha
+    cd [path_to_concha]/concha
     ```
 4. Create the conda environment for concha (all the right versions of packages). 
     ```
-    conda env create -f environment.lock.yaml
+    conda env create -f environment.yaml
     ```  
 5. Activate the new environment with
    ```
@@ -66,28 +66,17 @@ all the package versions line up.
    ```
    python setup.py develop
    ```
-7. Install Jupyter Lab (The program for running the Concha code and viewing charts.):
-    ```
-   conda install -c conda-forge jupyterlab
-    ```
-8. Make it so Jupyter Lab knows to use the concha environment:
-
-    a.
-        ```
-        conda install ipykernel
-        ```
-        
-    b.
-        ```
-        ipython kernel install --user --name=concha
-        ```
-9. Start up Jupyter lab:
+7. Make it so Jupyter Lab knows to use the concha environment:
+   ```
+   ipython kernel install --user --name=concha
+   ```
+8. Start up Jupyter lab:
     ```
     jupyter lab
     ```
     You should see the files on the left side. Navigate to the
     "notebooks" folder and open up [predict_production_guide.ipynb](/notebooks/predict_production_guide.ipynb) .
-10. Set the kernel to "concha" by going to Kernel" on the menu bar, then pick "Change Kernel..."
+10. Check Jupyter Lab is using the concha kernel: it should say "concha" by a little circle in the upper right corner. If it isn't, Set the kernel by going to Kernel" on the menu bar, then pick "Change Kernel..."
 
 on the bottom. Choose "concha" from the dropdown list and hit "Select".
 

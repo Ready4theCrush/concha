@@ -117,7 +117,9 @@ class Planner():
         ]
         cwd = os.getcwd()
         path_names = cwd.split(os.sep)
-        self.top_dir = os.sep.join(path_names[:path_names.index("concha")+1])
+        top_level_concha = [name for name in path_names if 'concha' in name][0]
+        self.top_dir = os.sep.join(path_names[:path_names.index(top_level_concha)+1])
+#         self.top_dir = os.sep.join(path_names[:path_names.index("concha")+1])
         self.planner_dir = os.sep.join([self.top_dir, 'planners', self.planner_name])
         
         # Creates a folder for the planner if not present
