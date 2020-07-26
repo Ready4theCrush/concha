@@ -3,6 +3,7 @@ import re
 import json
 import pandas as pd
 import numpy as np
+from scipy import stats
 from scipy.stats import norm, skewnorm
 from datetime import datetime, date, timedelta
 import requests
@@ -39,7 +40,7 @@ class Planner():
             demand_quantile=0.9,
             verbose=0,
             categorical_feature_cols=None,
-            demand_estimation_quantiles=24,
+            demand_estimation_quantiles=10,
             **product_settings
     ):
         """Creates a planner object to learn from past sales of products, then predict optimal production numbers.
@@ -667,7 +668,7 @@ class Planner():
             plt.title(f'{field.capitalize()} (all products)')
             plt.xlabel('Cross Validation Results')
             plt.ylabel('Frequency')
-    
+            
     def plot_profits(self):
         """Creates a layered histogram view of profits."""
         self.plot_cv_results(field='profit')
@@ -675,6 +676,37 @@ class Planner():
     def plot_wastes(self):
         """Creates a layered histogram view of average daily wastes."""
         self.plot_cv_results(field='waste')
+    
+    @staticmethod
+    def compare_paired_samples(s1, s2):
+        s1_mean, s2_mean = s1.mean(), s2.mean()
+        diff = np.subtract(s1, s2)
+        n = diff.shape[0]
+        diff_mean = diff.mean()
+        diff_std = diff.std(ddof=1)
+        t_alpha2 = stats.t.ppf(0.975, n-1)
+        half_bound = t_alpha2*diff_std/np.sqrt(n)
+        bounds = (diff_mean - half_bound, diff_mean + half_bound)
+        t_stat = abs(diff_mean/(diff_std/np.sqrt(n)))
+        p_value = 2*stats.t.cdf(-t_stat, n-1)        
+        return p_value, bounds
+    
+    def compare_cv_results(self, field='profit'):
+        if hasattr(self, 'grid_results'):
+            comparisons = []
+            for idx_1, row_1 in self.grid_results.iterrows():
+                for idx_2, row_2 in self.grid_results.iterrows():
+                    if idx_2 > idx_1:
+                        p_value, bounds = self.compare_paired_samples(row_1[field][0], row_2[field][0])
+                        comparison = {
+                            "params_1": row_1['label'],
+                            "params_2": row_2['label'],
+                            "p_value": p_value,
+                            "mean_difference_bounds": bounds
+                        }
+                        comparisons.append(comparison)
+            comparisons = pd.DataFrame(comparisons)
+            return comparisons       
         
     def simulate_history(
             self,

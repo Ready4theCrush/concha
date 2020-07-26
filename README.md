@@ -46,7 +46,7 @@ messing around with analysis tools.
 (or [Anaconda](https://docs.anaconda.com/anaconda/install/), which is prettier, but uses 500 MB) - it will handle making
 all the package versions line up.
 
-2. [Download Concha](https://github.com/Ready4theCrush/censored_demand/archive/master.zip) to
+2. [Download Concha](https://github.com/Ready4theCrush/concha/archive/master.zip) to
  somewhere convenient on your computer, and unpack it if it's in a zip file.
   
 3. Open up a [conda prompt](https://docs.anaconda.com/anaconda/install/verify-install/#:~:text=Windows%3A%20Click%20Start%2C%20search%2C,Applications%20%2D%20System%20Tools%20%2D%20terminal.).
