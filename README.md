@@ -50,7 +50,9 @@ all the package versions line up.
  somewhere convenient on your computer, and unpack the files to a directory named "concha".
   
 3. Open up a [conda prompt](https://docs.anaconda.com/anaconda/install/verify-install/#:~:text=Windows%3A%20Click%20Start%2C%20search%2C,Applications%20%2D%20System%20Tools%20%2D%20terminal.).
- (I realize "conda" and "concha" sound very similiar, sorry!) Running the following commands will get concha running.
+ (I realize "conda" and "concha" sound very similiar, sorry!)
+ 
+ Running the following commands will get concha running.
  
 4. Navigate to the concha directory:
     ```
@@ -60,19 +62,19 @@ all the package versions line up.
     ```
     conda env create -f environment.yaml
     ```  
-6. Activate the new environment with
+6. Activate the new environment.
    ```
    conda activate concha
    ```
-7. Install the concha code with:
+7. Install the concha code.
    ```
    python setup.py develop
    ```
-8. Make it so Jupyter Lab knows to use the concha environment:
+8. Make it so Jupyter Lab knows to use the concha environment.
    ```
    ipython kernel install --user --name=concha
    ```
-9. Start up Jupyter lab:
+9. Start up Jupyter lab.
     ```
     jupyter lab
     ```
@@ -99,7 +101,7 @@ and be using the right kernel.
  This sets up a planner, simulates some transactions, then learns from them
   to make predictions.
  1. Create a planner, and specify the price/cost/batch size for the simulated data.
-  Let's simulate a fancy cupcake cafe:
+  Let's simulate a fancy cupcake cafe.
     ```python
     from concha import Planner
   
@@ -107,7 +109,7 @@ and be using the right kernel.
     ```
     We assumed cupcakes were made it batches of 8, that they cost $3 to make,
     and sell for $4.75.
-2. Simulate some transaction data
+2. Simulate some transaction data.
     ```python
     sim_planner.simulate_history(
         num_days=180,
@@ -128,7 +130,7 @@ and be using the right kernel.
     ```
 
  #### Set up a planner to learn from real data
- 1. Create the planner:
+ 1. Create the planner.
     ```python
     from concha import Planner
     
@@ -200,15 +202,15 @@ should now show up in the settings file.)
     ```
     You can delete "example_product" if you want, it won't affect anything either way.
 
-6. Train the model
+6. Train the model.
    ```
    planner.train()
    ```
-7. Make predictions for the next week
+7. Make predictions for the next week.
    ```
    planner.predict()
    ```
-   The predictions are saved in the file `.../this_planner/forecast_production.csv` 
+   The predictions are saved in the file `.../this_planner/forecast_production.csv`.
    
 ### Make predictions with an existing planner
 1. Create the object for the existing planner.
@@ -219,7 +221,7 @@ should now show up in the settings file.)
     ```
    This tells Concha which folder to look in for settings and training data.
 
-2. Train and predict
+2. Train and predict.
     ```python
     planner.train()
     planner.predict()
@@ -298,20 +300,20 @@ effective performance of each product.
     models =['QuantileRegressor', 'Mean', 'MeanWeekPart', 'ProfitMaximizer']
     sim_planner.grid_search(param_grid={"model": models})
     ```
-4. Compare model metrics visually:
-    - View the loss function outputs during training of the deep learning models:
+4. Compare model metrics visually.
+    - View the loss function outputs during training of the deep learning models.
     ```python
     sim_planner.plot_validation_loss()
     ```
-    - Compare the average daily profits for each product and cross validation fold:
+    - Compare the average daily profits for each product and cross validation fold.
     ```python
     sim_planner.plot_profits()
     ```
-    - Compare the average daily waste numbers:
+    - Compare the average daily waste numbers.
     ```python
     sim_planner.plot_wastes()
     ```
-5. Compare model metrics with a paired t-test:
+5. Compare model metrics with a paired t-test.
    ```python
     sim_planner.compare_grid_results()
    ```
