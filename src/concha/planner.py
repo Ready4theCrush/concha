@@ -7,7 +7,6 @@ from scipy import stats
 from scipy.stats import norm, skewnorm
 from datetime import datetime, date, timedelta
 import requests
-import pickle
 
 from sklearn.model_selection import ParameterGrid
 
@@ -19,6 +18,8 @@ from concha import Product
 from concha import ProfitMaximizer, QuantileRegressor, Mean, MeanWeekPart
 
 rgen = np.random.default_rng()
+
+###########- PLANNER CLASS -###########
 
 class Planner():
     """Top level object for creating optimization models"""
@@ -131,6 +132,8 @@ class Planner():
         # Creates a planner_settings.json file, or updates, if it already exists.
         self.update_settings()      
         
+###########- TOP LEVEL METHODS -###########
+
     def train(self):
         """Wrapper for setup and train steps. This assumes each product already has the correct settings
             specified in ...concha/planners/[planner_name]/planner_settings.json."""
@@ -297,6 +300,8 @@ class Planner():
         with open(settings_path, 'w') as file:
             json.dump(self.settings, file, indent=4)
             
+###########- METADATA METHODS -###########
+            
     def generate_daily_history_metadata(self, load_from_file=False):
         """Creates a dataframe of features for each date in the transaction history.
         
@@ -373,6 +378,8 @@ class Planner():
         self.daily_forecast_metadata = dates[history_columns]
         return self.daily_forecast_metadata
             
+###########- PREDICTION METHODS -###########
+
     def setup_products(self):
         """Creates Product objects for each product present in settings and attaches a Model object to each.
         
@@ -487,7 +494,9 @@ class Planner():
         if sort_by_date:
             self.forecast_production = self.forecast_production.sort_values(by='date')
         self.forecast_production.to_csv(os.sep.join([self.planner_dir, 'forecast_production.csv']), index=False)
-        return self.forecast_production     
+        return self.forecast_production 
+    
+###########- ANALYSIS METHODS -###########
     
     def score_products(self, target='estimated_demand', true_demand='estimated_demand', cv=5, verbose=True):
         """Analyze performance of each product given the prediction model.
@@ -679,35 +688,86 @@ class Planner():
     
     @staticmethod
     def compare_paired_samples(s1, s2):
-        s1_mean, s2_mean = s1.mean(), s2.mean()
+        """Evaluate paired t-test and 95 % bounds of the mean of the difference.
+        
+        During the grid search, multiple sets of model parameters are tried for
+        each cross validation fold for each product. The folds and products are
+        checked in the same order, so two different approaches can be compared for
+        a significance of difference with a paired t-test. The p_value
+        is the probability that the two sets of samples (s1, s2) are drawn from
+        the same population. If the p_value is low, ( < .05 is a standard threshold),
+        then it is unlikely the the two sets are the same, i.e. the difference
+        between them is significant.
+        
+        The difference is calculated with pairwise subtraction: s1 - s2. So if the
+        bounds of the mean of the difference are positive, then s1 is larger than s2.
+        
+        Args:
+            s1 (np.Array): Set of scalar values for comparison against s2.
+            s2 (np.Array): Set of scalar values of same length as s1.
+            
+        Returns:
+            p_value (float): Probability the two samples are the drawn 
+                from the same population
+            bounds (Tuple(float)): 95 % Confidence bounds on the
+                mean difference (s1 - s2) between populations
+        """
+        # Find the difference between paired values
         diff = np.subtract(s1, s2)
         n = diff.shape[0]
+        
+        # Find the mean difference
         diff_mean = diff.mean()
+        
+        # Find the standard deviation of the sample
         diff_std = diff.std(ddof=1)
+        
+        # Find the x value at which P(T > x) = .025
         t_alpha2 = stats.t.ppf(0.975, n-1)
         half_bound = t_alpha2*diff_std/np.sqrt(n)
+        
+        # Get bounds
         bounds = (diff_mean - half_bound, diff_mean + half_bound)
         t_stat = abs(diff_mean/(diff_std/np.sqrt(n)))
+        
+        # get prob of standardized mean of differences if sample are from samp pop
         p_value = 2*stats.t.cdf(-t_stat, n-1)        
         return p_value, bounds
     
-    def compare_cv_results(self, field='profit'):
+    def compare_grid_results(self):
+        """Get pairwise paired t-test and mean of difference bounds for all params
+            run during grid_search.
+        
+        Returns:
+            comparisons (pd.DataFrame): columns:
+                params_1: String description of first params set
+                params_2: String description of second params set
+                profit_p_value: pairwise t-test between cross validaiton fold avg profits
+                profit_difference_bounds: 95% confidence bound on mean of difference.
+                waste_p_value: pairwise t-test between cross validation fold avg wastes
+                waste_difference_bounds: 95% confidence bound on mean of difference of avg wastes. 
+        """
         if hasattr(self, 'grid_results'):
             comparisons = []
             for idx_1, row_1 in self.grid_results.iterrows():
                 for idx_2, row_2 in self.grid_results.iterrows():
                     if idx_2 > idx_1:
-                        p_value, bounds = self.compare_paired_samples(row_1[field][0], row_2[field][0])
+                        profit_p_value, profit_bounds = self.compare_paired_samples(row_1['profit'][0], row_2['profit'][0])
+                        waste_p_value, waste_bounds = self.compare_paired_samples(row_1['waste'][0], row_2['waste'][0])
                         comparison = {
                             "params_1": row_1['label'],
                             "params_2": row_2['label'],
-                            "p_value": p_value,
-                            "mean_difference_bounds": bounds
+                            "profit_p_value": np.round(profit_p_value, 5),
+                            "profit_difference_bounds": np.round(profit_bounds, 3),
+                            "waste_p_value": np.round(waste_p_value, 5),
+                            "waste_difference_bounds": np.round(waste_bounds, 3)
                         }
                         comparisons.append(comparison)
             comparisons = pd.DataFrame(comparisons)
             return comparisons       
         
+###########- SIMULATION METHODS -###########
+
     def simulate_history(
             self,
             num_days=90,
@@ -915,6 +975,8 @@ class Planner():
             self.transactions.to_csv(os.sep.join([self.planner_dir, 'simulated_transactions.csv']), index=False)
             self.simulated_demand_history.to_csv(os.sep.join([self.planner_dir, 'simulated_demand_history.csv']), index=False)
         return transactions
+    
+###########- WEATHER METHODS -###########
     
     def get_weather_history(self, start_date, end_date):
         """Looks up the weather within a date range at the planner's station_id

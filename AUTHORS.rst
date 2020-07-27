@@ -2,4 +2,4 @@
 Contributors
 ============
 
-* Thomas Haley <thaley47@gmail.com>
+* Thomas Haley <thomashaleyds@gmail.com>

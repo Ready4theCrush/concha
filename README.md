@@ -47,37 +47,38 @@ messing around with analysis tools.
 all the package versions line up.
 
 2. [Download Concha](https://github.com/Ready4theCrush/concha/archive/master.zip) to
- somewhere convenient on your computer, and unpack it if it's in a zip file.
+ somewhere convenient on your computer, and unpack the files to a directory named "concha".
   
 3. Open up a [conda prompt](https://docs.anaconda.com/anaconda/install/verify-install/#:~:text=Windows%3A%20Click%20Start%2C%20search%2C,Applications%20%2D%20System%20Tools%20%2D%20terminal.).
- (I realize "conda" and "concha" sound very similiar, sorry!) Then navigate to the concha directory:
+ (I realize "conda" and "concha" sound very similiar, sorry!) Running the following commands will get concha running.
+ 
+4. Navigate to the concha directory:
     ```
     cd [path_to_concha]/concha
     ```
-4. Create the conda environment for concha (all the right versions of packages). 
+5. Create the conda environment for concha (all the right versions of packages). 
     ```
     conda env create -f environment.yaml
     ```  
-5. Activate the new environment with
+6. Activate the new environment with
    ```
    conda activate concha
    ```
-6. Install the concha code with:
+7. Install the concha code with:
    ```
    python setup.py develop
    ```
-7. Make it so Jupyter Lab knows to use the concha environment:
+8. Make it so Jupyter Lab knows to use the concha environment:
    ```
    ipython kernel install --user --name=concha
    ```
-8. Start up Jupyter lab:
+9. Start up Jupyter lab:
     ```
     jupyter lab
     ```
     You should see the files on the left side. Navigate to the
     "notebooks" folder and open up [predict_production_guide.ipynb](/notebooks/predict_production_guide.ipynb) .
-10. Check Jupyter Lab is using the concha kernel: it should say "concha" by a little circle in the upper right corner. If it isn't, Set the kernel by going to Kernel" on the menu bar, then pick "Change Kernel..."
-
+10. Check Jupyter Lab is using the concha kernel: it should say "concha" by a little circle in the upper right corner. If it isn't, Set the kernel by going to Kernel" on the menu bar, then pick "Change Kernel..." 
 on the bottom. Choose "concha" from the dropdown list and hit "Select".
 
 The next time you want to predict how much product to make, just open the conda prompt, go to the concha
@@ -300,15 +301,19 @@ effective performance of each product.
 4. Compare model metrics visually:
     - View the loss function outputs during training of the deep learning models:
     ```python
-   sim_planner.plot_validation_loss()
+    sim_planner.plot_validation_loss()
     ```
-   - Compare the average daily profits for each product and cross validation fold:
+    - Compare the average daily profits for each product and cross validation fold:
+    ```python
+    sim_planner.plot_profits()
+    ```
+    - Compare the average daily waste numbers:
+    ```python
+    sim_planner.plot_wastes()
+    ```
+5. Compare model metrics with a paired t-test:
    ```python
-   sim_planner.plot_profits()
-   ```
-   - Compare the average daily waste numbers:
-   ```python
-   sim_planner.plot_wastes()
+    sim_planner.compare_grid_results()
    ```
    
 ## Package Layout
