@@ -44,7 +44,7 @@ messing around with analysis tools.
 
 1. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
 (or [Anaconda](https://docs.anaconda.com/anaconda/install/), which is prettier, but uses 500 MB) - it will handle making
-all the package versions line up.
+all the package versions line up. You will need the "Python 3.x" version, and the 64 bit version (The last 32 bit computer was made in 2002). The default options are fine.
 
 2. [Download Concha](https://github.com/Ready4theCrush/concha/archive/master.zip) to
  somewhere convenient on your computer, and unpack the files to a directory named "concha".
@@ -90,8 +90,9 @@ and be using the right kernel.
  ## Usage
  
  In Jupyter Lab, the notebook has boxes called "cells". You can run a cell by putting the cursor
- in it and typing 
- `Control-Enter`. Even if you don't have any transaction data to work with yet, you can simulate
+ within it and typing 
+ `Control-Enter`. When the code is running, an asterisk appears in the upper left of the cell, a number
+ takes its place when it's done. Even if you don't have any transaction data to work with yet, you can simulate
  transactions with the simulator and see how concha works.
  
  All the usage examples below are already in the [predict_production_guide](/notebooks/predict_production_guide.ipynb)
@@ -101,7 +102,7 @@ and be using the right kernel.
  This sets up a planner, simulates some transactions, then learns from them
   to make predictions.
  1. Create a planner, and specify the price/cost/batch size for the simulated data.
-  Let's simulate a fancy cupcake cafe.
+    Let's simulate a fancy cupcake cafe.
     ```python
     from concha import Planner
   

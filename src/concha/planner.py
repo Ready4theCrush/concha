@@ -119,9 +119,16 @@ class Planner():
         ]
         cwd = os.getcwd()
         path_names = cwd.split(os.sep)
-        top_level_concha = [name for name in path_names if 'concha' in name][0]
-        self.top_dir = os.sep.join(path_names[:path_names.index(top_level_concha)+1])
-#         self.top_dir = os.sep.join(path_names[:path_names.index("concha")+1])
+        
+        # try to find the lowest level folder in the cwd with "concha" in the name
+        concha_mentions = [name for name in path_names if 'concha' in name]
+        if len(concha_mentions) > 0:
+            top_level_concha = concha_mentions[-1]
+            self.top_dir = os.sep.join(path_names[:path_names.index(top_level_concha)+1])
+        else:
+            # if it can't be found, just assume the cwd is the top.
+            self.top_dir = cwd
+
         self.planner_dir = os.sep.join([self.top_dir, 'planners', self.planner_name])
         
         # Creates a folder for the planner if not present
