@@ -12,7 +12,7 @@ Cafes, grocery stores, restaurants, donut shops, and panaderias face a fundament
 ### Try it out
 
 You can run concha entirely on Google Colab (a free deep learning platform).
-[Click here to use concha](https://https://colab.research.google.com/github/Ready4theCrush/concha/blob/master/notebooks/concha_examples.ipynb)
+[Click here to use concha](https://colab.research.google.com/github/Ready4theCrush/concha/blob/master/notebooks/concha_examples.ipynb)
 
 If you want to do more than run simulations, you can copy the notebook to your drive, and attach your Google Drive
  to the Colab notebook. It will save everything you do in a `concha_planners` folder so you can come back to it later.
