@@ -1,104 +1,29 @@
-# Concha
+## Concha
 
 _A machine learning system for how deciding many things to make each day._
 
 Cafes, grocery stores, restaurants, donut shops, and panaderias face a fundamental
- question every morning:
-  
-  **"How many should I make?"**
+ question every morning: _How many should I make?"_
  
  Concha uses data tracked by the point of sale service (Toast, Square, Clover, etc),
-   combined with the day of the week and local weather conditions to learn demand patterns.
+   combined with local weather conditions to learn demand patterns.
    Then it predicts how much to make of each product to maximize profit.
-### Why?
-If we knew how much people wanted to buy, the _demand_, this problem would be easy.
- But we don't, demand is random: it can't be known exactly. But we do know
- demand can have patterns: Saturdays might be busier than Tuesdays, soup may sell better on cold
- days than hot ones, some salads sell better on weekdays, but only when it's not too cold, etc. 
- We can approximate the conditional probability
-  density of demand for the product (given the day of the week and the weather). 
-  
-To decide
-  how much product to actually make to optimize profit, we also need to consider much it costs to make the
-  product and how much it sells for. This tells us how much it costs us to make too little
-   vs make too much. If a concha sells for $1, and costs $.30 to make, making one too many 
-   costs $.30, making one too few costs $1.
    
-## Getting the input data
-Almost all transactions are processed electronically, and the point of sale provider keeps track
-of the transactions. The transactions can be downloaded from the user's POS system dashboard.
-Concha can use the transactions downloaded as a .csv file, with columns in the data for:
-* Product name
-* Time the product was sold
-* Quantity sold
+### Try it out
 
-The process is different for every POS provider. Here are some guides:
-[Square](https://squareup.com/help/us/en/article/5072-summaries-and-reports-from-the-online-dashboard#download-transactions-history
-), [Toast](https://central.toasttab.com/s/article/Automated-Nightly-Data-Export-1492723819691)
-, [Clover](https://www.clover.com/help/learn-more-about-the-new-sales-report/#export-sales-reports).
+You can run concha entirely on Google Colab (a free deep learning platform).
+[Click here to use concha](https://https://colab.research.google.com/github/Ready4theCrush/concha/blob/master/notebooks/concha_examples.ipynb)
 
-Transactions can also be simulated. This is helpful for getting started and
-messing around with analysis tools.  
-
-## Installation
-
-1. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
-(or [Anaconda](https://docs.anaconda.com/anaconda/install/), which is prettier, but uses 500 MB) - it will handle making
-all the package versions line up. You will need the "Python 3.x" version, and the 64 bit version (The last 32 bit computer was made in 2002). The default options are fine.
-
-2. [Download Concha](https://github.com/Ready4theCrush/concha/archive/master.zip) to
- somewhere convenient on your computer, and unpack the files to a directory named "concha".
-  
-3. Open up a [conda prompt](https://docs.anaconda.com/anaconda/install/verify-install/#:~:text=Windows%3A%20Click%20Start%2C%20search%2C,Applications%20%2D%20System%20Tools%20%2D%20terminal.).
- (I realize "conda" and "concha" sound very similiar, sorry!)
+If you want to do more than run simulations, you can copy the notebook to your drive, and attach your Google Drive
+ to the Colab notebook. It will save everything you do in a `concha_planners` folder so you can come back to it later.
  
- Running the following commands will get concha running.
- 
-4. Navigate to the concha directory:
-    ```
-    cd [path_to_concha]/concha
-    ```
-5. Create the conda environment for concha (all the right versions of packages). 
-    ```
-    conda env create -f environment.yaml
-    ```  
-6. Activate the new environment.
-   ```
-   conda activate concha
-   ```
-7. Install the concha code.
-   ```
-   python setup.py develop
-   ```
-8. Make it so Jupyter Lab knows to use the concha environment.
-   ```
-   ipython kernel install --user --name=concha
-   ```
-9. Start up Jupyter lab.
-    ```
-    jupyter lab
-    ```
-    You should see the files on the left side. Navigate to the
-    "notebooks" folder and open up [predict_production_guide.ipynb](/notebooks/predict_production_guide.ipynb) .
-10. Check Jupyter Lab is using the concha kernel: it should say "concha" by a little circle in the upper right corner. If it isn't, Set the kernel by going to Kernel" on the menu bar, then pick "Change Kernel..." 
-on the bottom. Choose "concha" from the dropdown list and hit "Select".
-
-The next time you want to predict how much product to make, just open the conda prompt, go to the concha
-folder and run the command `jupyter lab`. It should open to the right notebook
-and be using the right kernel.
- 
- ## Usage
- 
- In Jupyter Lab, the notebook has boxes called "cells". You can run a cell by putting the cursor
+ In Jupyter Lab/Colab, the notebook has boxes called "cells". You can run a cell by putting the cursor
  within it and typing 
- `Control-Enter`. When the code is running, an asterisk appears in the upper left of the cell, a number
- takes its place when it's done. Even if you don't have any transaction data to work with yet, you can simulate
- transactions with the simulator and see how concha works.
+ `Control-Enter`. When the code is running, an asterisk/spinny thing appears in the upper left of the cell, and then a number
+ takes its place when it's done.
  
- All the usage examples below are already in the [predict_production_guide](/notebooks/predict_production_guide.ipynb)
- notebook.
+ ### Usage
  
- #### Get started
  This sets up a planner, simulates some transactions, then learns from them
   to make predictions.
  1. Create a planner, and specify the price/cost/batch size for the simulated data.
@@ -108,7 +33,7 @@ and be using the right kernel.
   
     sim_planner = Planner(planner_name="sim_cafe", batch_size=8, batch_cost=24.0, unit_sale_price=4.75)
     ```
-    We assumed cupcakes were made it batches of 8, that they cost $3 to make,
+    This assumes cupcakes are made in batches of 8, that they cost $3 to make,
     and sell for $4.75.
 2. Simulate some transaction data.
     ```python
@@ -137,71 +62,47 @@ and be using the right kernel.
     
     planner = Planner(planner_name="this_planner", model="ProfitMaximizer")
     ```
-    This will create a new folder in the `.../concha/planners` directory called `this_planner`. 
- 2. Drop the transaction csv files into the `.../concha/planers/this_planner` directory.
+    This will create a new folder in the home directory called `~/concha_planners/this_planner`. 
+ 2. Drop the transaction csv files into the `~/concha_planers/this_planner/history` directory.
  3. Tell the planner how to read the transaction csv files.
-  Open the `.../this_planner/planner_settings.json` 
- file in a text editor. It looks like this:
- 
-    ```json
-    {
-        "weather": {
-            "noaa_api_key": null,
-            "noaa_station_id": null
-        },
-        "transactions": {
-            "time_column": null,
-            "product_column": null,
-            "quantity_column": null
-        },
-        "product": {
-            "example_product": {
-                "batch_size": 1,
-                "batch_cost": 1,
-                "unit_sale_price": 1.5
-            }
-        }
-    }
-    ``` 
+
     Let's say the columns in the `sales_history.csv` file downloaded from the POS dashboard
-    has columns including, "time_of_sale", "item_code", and "num_sold". You would change
-    the `transactions` part of the file to:
-    ```json
-        "transactions": {
-            "time_column": "time_of_sale",
-            "product_column": "item_code",
-            "quantity_column": "num_sold"
-        },    
-    ```
-    Then save the file.
-4. Import the transactions, and update the settings file with all the products.
+    has columns including, "time_of_sale", "item_code", and "num_sold". You can import the transactions
+    and tell the model which columns are which with:
     ```python
-    planner.import_transactions()
+    planner.import_transactions(
+        time_column="time_of_sale",
+        product_column="item_code",
+        quantity_column="num_sold"
+    )
+    
+    #This writes the column names to file so you don't have to do it again.
     planner.update_settings()
     ```
-5. Update the `planner_settings.json` file with the batch_size, batch_cost, 
-and unit_sale_price for each product. (Each product listed in the transactions
-should now show up in the settings file.)
-    ```json
-    "product": {
-        "example_product": {
-            "batch_size": 1,
-            "batch_cost": 1,
-            "unit_sale_price": 1.5
-        },
-        "concha_small": {
-            "batch_size": 10,
-            "batch_cost": 3.0,
-            "unit_sale_price": 1.0
-        },
-        "choc_cake": {
-            "batch_size": 1,
-            "batch_cost": 18.0,
-            "unit_sale_price": 27.50
-        }
-    }
+ 4. To optimize profit, the model needs to know gross margin of each product. You can see the products
+ that were imported with:
+    ```python
+    # This creates the products
+    planner.setup_products()
+    
+    #This returns a list of the product names
+    sim_planner.product()
     ```
-    You can delete "example_product" if you want, it won't affect anything either way.
+    
+    You can see the current settings for a product:
+    ```python
+    planner.product("productname")
+    ```
+    Then you can set the production batch size, batch cost to produce, and item sale price for each one:
+    ```python
+    planner.product(
+        "productname",
+        batch_size = 4,
+        batch_cost = 8.0,
+        unit_sale_price = 3.0
+    )
+    ```
+    This is for a product made in batches of 4, that costs $8 to make per batch, and sells for $3 each.
 
 6. Train the model.
    ```
@@ -211,7 +112,7 @@ should now show up in the settings file.)
    ```
    planner.predict()
    ```
-   The predictions are saved in the file `.../this_planner/forecast_production.csv`.
+   The predictions are saved in the file `.../this_planner/forecast/forecast_production.csv`.
    
 ### Make predictions with an existing planner
 1. Create the object for the existing planner.
@@ -242,15 +143,12 @@ planner models, and then integrates the weather predictions to make production f
      Then click "SEARCH" again.
      - When you find the nearest station, click on it and copy the `ID`. It will look like "GHCND:USC00448084"
      
-3. Open the settings file for the planner in `.../concha/planners/this_planner/planner_settings.json` and
-put in the NOAA API key and station ID.
-    ```json
-    "weather": {
-        "noaa_api_key": "32pretendUEVWnoaa29Skey02",
-        "noaa_station_id": "GHCND:USC00448084"
-    },
+3. Set the API key and the best weather station:
+    ```python
+    planner.noaa_key("Yourkeyhere")
+    planner.noaa_station("GHCND:USC00448084")
     ```
-   Then save the file. Now every time you run `.train()` on your model, Concha will look up the 
+    Now every time you run `.train()` on your model, Concha will look up the 
    weather for every date when a sale was listed and learn how weather affects demand.
    
 ### Analyzing Product Performance
@@ -317,7 +215,53 @@ effective performance of each product.
 5. Compare model metrics with a paired t-test.
    ```python
     sim_planner.compare_grid_results()
+   ```  
+### Local Installation 
+
+1. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
+(or [Anaconda](https://docs.anaconda.com/anaconda/install/), which is prettier, but uses 500 MB) - it will handle making
+all the package versions line up. You will need the "Python 3.x" version, and the 64 bit version (The last 32 bit computer was made in 2002). The default options are fine.
+
+2. [Download Concha](https://github.com/Ready4theCrush/concha/archive/master.zip) to
+ somewhere convenient on your computer, and unpack the files to a directory named "concha".
+  
+3. Open up a [conda prompt](https://docs.anaconda.com/anaconda/install/verify-install/#:~:text=Windows%3A%20Click%20Start%2C%20search%2C,Applications%20%2D%20System%20Tools%20%2D%20terminal.).
+ (I realize "conda" and "concha" sound very similiar, sorry!)
+ 
+ Running the following commands will get concha running.
+ 
+4. Navigate to the concha directory:
+    ```
+    cd [path_to_concha]/concha
+    ```
+5. Create the conda environment for concha (all the right versions of packages). 
+    ```
+    conda env create -f environment.yaml
+    ```  
+6. Activate the new environment.
    ```
+   conda activate concha
+   ```
+7. Install the concha code.
+   ```
+   python setup.py develop
+   ```
+8. Make it so Jupyter Lab knows to use the concha environment.
+   ```
+   ipython kernel install --user --name=concha
+   ```
+9. Start up Jupyter lab.
+    ```
+    jupyter lab
+    ```
+    You should see the files on the left side. Navigate to the
+    "notebooks" folder and open up [concha_examples.ipynb](/notebooks/concha_examples.ipynb) .
+10. Check Jupyter Lab is using the concha kernel: it should say "concha" by a little circle in the upper right corner. If it isn't, Set the kernel by going to Kernel" on the menu bar, then pick "Change Kernel..." 
+on the bottom. Choose "concha" from the dropdown list and hit "Select".
+
+The next time you want to predict how much product to make, just open the conda prompt, go to the concha
+folder and run the command `jupyter lab`. It should open to the right notebook
+and be using the right kernel.
    
 ## Package Layout
 The source code is in [/src/concha](/src/concha).
