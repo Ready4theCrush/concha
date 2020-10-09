@@ -2,6 +2,11 @@
 Changelog
 =========
 
+Version 0.2.1
+===========
+
+- Point README and colab links to live pypi registry.
+
 Version 0.2.0
 ===========
 
