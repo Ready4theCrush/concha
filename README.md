@@ -24,6 +24,8 @@ If you want to do more than run simulations, you can copy the notebook to your d
  
  ### Usage
  
+ 0. Install: `pip install concha`
+ 
  This sets up a planner, simulates some transactions, then learns from them
   to make predictions.
  1. Create a planner, and specify the price/cost/batch size for the simulated data.
