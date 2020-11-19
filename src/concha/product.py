@@ -190,9 +190,6 @@ class Product:
         # get the minute of each transaction in order to divide the transactions into quantiles
         # based on the minute within the day in which they occurred.
         trans = self.transactions.copy()
-        trans["date"] = trans["timestamp"].dt.date
-        trans["date"] = pd.to_datetime(trans["date"])
-        trans["minute"] = trans["timestamp"].dt.hour * 60 + trans["timestamp"].dt.minute
 
         # train quantile bins on dates least likely to have a stockout (days with latest sales)
 

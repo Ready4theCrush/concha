@@ -1,13 +1,11 @@
 import os
-from pathlib import Path
-import re
-import json
 import pandas as pd
 import numpy as np
 from scipy import stats
 from scipy.stats import norm, skewnorm
-from datetime import date, timedelta
-import requests
+from datetime import datetime, date, timedelta, timezone
+from dateutil import parser
+import pytz
 
 from sklearn.model_selection import ParameterGrid
 
@@ -16,6 +14,9 @@ import seaborn as sns
 
 from concha import Product
 from concha import ProfitMaximizer, QuantileRegressor, Mean, MeanWeekPart
+from concha.environment import FileHandler
+from concha.weather import NOAA
+from concha.importers import Square
 
 rgen = np.random.default_rng()
 
@@ -28,8 +29,6 @@ class Planner:
     def __init__(
         self,
         planner_name="example",
-        noaa_api_key=None,
-        noaa_station_id=None,
         estimate_missed_demand=True,
         model="ProfitMaximizer",
         model_layers=4,
@@ -48,12 +47,8 @@ class Planner:
         """Creates a planner object to learn from past sales of products, then predict optimal production numbers.
 
         Args:
-            planner_name (str): The name of the folder (.../concha/planners/[planner_name]) where all sales transactions
+            planner_name (str): The name of the folder (.../concha_planners/[planner_name]) where all sales transactions
                 csv files should be placed for import, and where the settings file is written.
-            noaa_api_key (str): If weather data is desired, the key used for accessing the NOAA daily summaries API.
-                Keys are available for free (https://www.ncdc.noaa.gov/cdo-web/token). Defaults to None.
-            noaa_station_id (str): The station from which to pull the daily weather histories, and the location given to
-                NOAA for the forecasts (https://www.ncdc.noaa.gov/cdo-web/search). Defaults to None.
             estimate_missed_demand (bool): If true, estimates of actual demand constructed from transactions are
                 used in training the prediction models. Defaults to True.
             model (str): The model to construct production predictions. Options:
@@ -91,8 +86,6 @@ class Planner:
         """
         self.planner_name = planner_name
         self.products = {}
-        self.noaa_api_key = noaa_api_key
-        self.noaa_station_id = noaa_station_id
         self.estimate_missed_demand = estimate_missed_demand
         self.model = model
         self.model_layers = model_layers
@@ -111,62 +104,32 @@ class Planner:
         # These attributes track the columns in the transaction csv(s).
         self.time_column, self.product_column, self.quantity_column = None, None, None
 
-        # Decide where the concha_planners folder should be located
-
-        # Detect if concha is running in a colab notebook with a Google Drive attached
-        # And if so, whether a concha_planners folder already exists
-        is_colab = os.path.exists(os.path.join("/content", "sample_data"))
-        has_google_drive_mounted = os.path.exists(
-            os.path.join("/content", "drive", "My Drive")
+        self.filehandler = FileHandler()
+        self.planner_dir, self.settings_path = self.filehandler.check_planner_path(
+            self.planner_name
         )
-        planners_path_in_drive = os.path.join(
-            "/content", "drive", "My Drive", "concha_planners"
-        )
-        planners_path_in_colab = os.path.join("/content", "concha_planners")
-        planners_path_in_home = os.path.join(Path.home(), "concha_planners")
-
-        # If Drive is mounted to colab, use that concha_planners folder, or make one
-        if os.path.exists(planners_path_in_drive):
-            self.top_dir = planners_path_in_drive
-        elif has_google_drive_mounted:
-            os.mkdir(planners_path_in_drive)
-            self.top_dir = planners_path_in_drive
-        elif os.path.exists(planners_path_in_colab):
-            self.top_dir = planners_path_in_colab
-        elif is_colab:
-            os.mkdir(planners_path_in_colab)
-            self.top_dir = planners_path_in_colab
-        elif os.path.exists(planners_path_in_home):
-            self.top_dir = planners_path_in_home
-        else:
-            os.mkdir(planners_path_in_home)
-            self.top_dir = planners_path_in_home
-
-        self.planner_dir = os.path.join(self.top_dir, self.planner_name)
-
-        # Creates a folder for the planner if not present
-        if not os.path.exists(self.planner_dir):
-            print("Creating folder for planner in: " + self.planner_dir)
-            os.makedirs(self.planner_dir)
-
-        # make folders for history, metadata, forecast, model
-        folder_names = ["history", "metadata", "forecast", "models"]
-        folder_paths = [os.path.join(self.planner_dir, name) for name in folder_names]
-        for path in folder_paths:
-            if not os.path.exists(path):
-                os.makedirs(path)
 
         # Creates a planner_settings.json file, or updates, if it already exists.
         self.update_settings()
+
+        # Set up the weather if the right info is available
+        if "weather" in self.settings:
+            if self.settings["weather"]["type"] == "noaa":
+                self.weather = NOAA(name=self.settings["weather"]["name"])
+
+        if "importer" in self.settings:
+            if self.settings["importer"]["type"] == "square":
+                self.importer = Square(name=self.settings["importer"]["name"])
 
     ###########- TOP LEVEL METHODS -###########
 
     def train(self):
         """Wrapper for setup and train steps. This assumes each product already has the correct settings
-        specified in ...concha/planners/[planner_name]/planner_settings.json."""
-        self.update_settings()
-        self.import_transactions()
-        self.update_settings()
+        specified in ...concha_planners/[planner_name]/planner_settings.json."""
+        if not hasattr(self, "transactions"):
+            self.update_settings()
+            self.import_transactions()
+            self.update_settings()
         self.generate_daily_history_metadata()
         self.setup_products()
         self.train_models()
@@ -182,12 +145,53 @@ class Planner:
         production = self.predict_production()
         return production
 
+    def update_history(self, products=None):
+        """Wrapper that pulls in new transactions from the importer, then imports them to the planner.
+
+        Args:
+            products (list[str], or str): If a list of strings, the transactions are filtered to only
+                include the listed products. If a string, only that product's transactions
+                are imported. If None (the default), no filter is applied and all products
+                available are imported.
+
+        Returns:
+            new_transactions (DataFrame): The new batch of transactions written to
+                [planner_name]/history
+        """
+
+        # Check if an importer is attached first
+        if not hasattr(self, "importer"):
+            print("There isn't an importer attached to this planner")
+            return
+
+        # Get new transactions
+        location = self.settings["location"]
+        new_transactions = self.importer.get_orders(
+            location=location["name"], last_timestamp=location["last_timestamp"]
+        )
+        most_recent_order = parser.parse(new_transactions.iloc[-1]["timestamp"])
+        most_recent_order = most_recent_order.isoformat()
+
+        # Write the history to file.
+        current_timestamp = datetime.now().strftime("%Y-%m-%dT%H_%M_%S")
+        history_path = os.path.join(
+            self.planner_dir, "history", current_timestamp + ".csv"
+        )
+        new_transactions.to_csv(history_path, index=False)
+        self.settings["location"]["last_timestamp"] = most_recent_order
+        tz = self.settings["location"]["timezone"]
+        self.filehandler.dict_to_file(self.settings, self.settings_path)
+        self.import_transactions(products=products, tz=tz)
+        self.update_settings()
+        return new_transactions
+
     def import_transactions(
         self,
+        products=None,
         time_column=None,
         product_column=None,
         quantity_column=None,
-        time_format=None,
+        tz=None,
     ):
         """Imports any csv files of transactions for use.
 
@@ -196,11 +200,15 @@ class Planner:
         (duplicate rows are removed).
 
         Args:
+            products (str or list): Optional filter for products imported. If string, only imports that
+                product, if list, imports only those products. If none, no filter is applied
+                and all products are imported.
             time_column (str): Name of the column with the timestamp for sales transactions used in csv(s).
             product_column (str): Name of the product identifier column.
             quantity_column (str): Name of column listing number of each product sold per timestamp.
-            time_format (str): In case format of time column isn't interpretable by pandas.to_datetime(), this
-                specifies the exact format (https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior)
+            tz (str): Format like "US/Eastern" or "US/Pacific". If set, transactions will be imported at tz.
+                If not set, the "square_location" location timezone will be used. Otherwise,
+                "US/Eastern" is used.
 
         Attributes Set:
             transactions (pd.DataFrame): Dataframe of all transactions.
@@ -209,8 +217,14 @@ class Planner:
             transactions (pd.DataFrame): Dataframe of all transactions.
 
         """
+        # Set a tz if none provided or in settings.
+        if tz is None:
+            if "location" in self.settings:
+                tz = self.settings["location"]["timezone"]
+            else:
+                tz = "US/Eastern"
+
         # get the csv files in the history directory of the planner
-        print(self.planner_dir)
         history_path = os.path.join(self.planner_dir, "history")
         self.transaction_csv_paths = [
             os.sep.join([history_path, path])
@@ -223,8 +237,9 @@ class Planner:
             print("No transaction csv files to import.")
             return
 
-        print("Importing from: " + ", ".join(self.transaction_csv_paths))
+        print("Importing from: " + history_path)
         csv_data = pd.concat([pd.read_csv(path) for path in self.transaction_csv_paths])
+
         print("Imported csv columns: " + ", ".join(list(csv_data.columns)))
         use_columns = []
 
@@ -244,65 +259,64 @@ class Planner:
         if len(use_columns) < 3:
             use_columns = csv_data.columns[:3]
 
+        # Write the updated transaction columns names back to settings.
+        self.settings["transactions"] = {
+            "time_column": use_columns[0],
+            "product_column": use_columns[1],
+            "quantity_column": use_columns[2],
+        }
+        self.filehandler.dict_to_file(self.settings, self.settings_path)
+
         csv_data[["timestamp", "product", "quantity"]] = csv_data[use_columns]
-        csv_data["timestamp"] = pd.to_datetime(
-            csv_data["timestamp"], format=time_format
+        csv_data["timestamp"] = csv_data["timestamp"].astype(str)
+
+        # Get the date and minute in local time for estimating demand
+        localtz = pytz.timezone(tz)
+        csv_data["local_ts"] = csv_data["timestamp"].apply(
+            lambda x: parser.parse(x).astimezone(localtz)
+        )
+        csv_data["date"] = csv_data["local_ts"].apply(lambda x: x.date())
+        csv_data["date"] = pd.to_datetime(csv_data["date"])
+        csv_data["minute"] = csv_data.apply(
+            lambda row: row["local_ts"].hour * 60 + row["local_ts"].minute, axis=1
         )
         csv_data["product"] = csv_data["product"].astype(str)
         csv_data["quantity"] = pd.to_numeric(csv_data["quantity"])
 
+        # If only one product was passed in as a string - convert it to a list
+        if isinstance(products, str):
+            products = [products]
+
+        # Filter the transactions to only include the products specified.
+        if products is not None:
+            csv_data = csv_data[csv_data["product"].isin(products)]
+
         # Drop duplicate rows. Transaction data dumps are probably specific time periods, so this prevents the user having
         # to figure out which files overlap.
-        self.transactions = csv_data[
-            ["timestamp", "product", "quantity"]
-        ].drop_duplicates(ignore_index=True)
-        self.time_column, self.product_column, self.quantity_column = (
-            time_column,
-            product_column,
-            quantity_column,
-        )
+        self.transactions = csv_data.drop_duplicates(ignore_index=True)
         return self.transactions
 
-    def update_settings(self, update_weather_station=False):
+    def update_settings(self):
         """Syncronizes the values in the settings file with planner object values
 
-        If a ...concha/planners/[planner_name]/planner_settings.json file is not present, this creates one.
+        If a ...concha_planners/[planner_name]/planner_settings.json file is not present, this creates one.
         If it is present, this syncs values in the planner with the file.
-
-        Args:
-            update_weather_station (bool): If True, model will look up the name,
-            location data for the weather station id listed, even if those values are already present.
-            Useful if user changes the station and wants to rewrite the station metadata.
-            Defaults to False.
 
         Attributes Set:
             settings (Dict): Dict (synced) verson of what's present in the json file.
         """
         # If the file exists, get the current values.
-        settings_path = os.sep.join([self.planner_dir, "planner_settings.json"])
-        if "planner_settings.json" in os.listdir(self.planner_dir):
-            json_file = open(settings_path)
-            self.settings = json.load(json_file)
-            json_file.close()
+        if os.path.exists(self.settings_path):
+            self.settings = self.filehandler.dict_from_file(self.settings_path)
         else:
             # If file isn't present, make a fresh set of values
             self.settings = {
-                "weather": {
-                    "noaa_api_key": self.noaa_api_key,
-                    "noaa_station_id": self.noaa_station_id,
-                },
                 "transactions": {
                     "time_column": self.time_column,
                     "product_column": self.product_column,
                     "quantity_column": self.quantity_column,
                 },
-                "product": {
-                    "example_product": {
-                        "batch_size": 1,
-                        "batch_cost": 1,
-                        "unit_sale_price": 1.5,
-                    }
-                },
+                "product": {},
             }
 
         # if transactions have been imported, add any new product ids to settings['product']
@@ -314,54 +328,11 @@ class Planner:
                     dummy_prod = Product(product)
                     self.settings["product"][product] = dummy_prod.get_settings()
 
-        # Update the settings with the noaa_api_key if present
-        if self.noaa_api_key is not None:
-            self.settings["weather"]["noaa_api_key"] = self.noaa_api_key
-
-        if self.noaa_station_id is not None:
-            self.settings["weather"]["noaa_station_id"] = self.noaa_station_id
-
-        # look up the station location if not present, or if update_weather_station is True
-        has_key = self.settings["weather"]["noaa_api_key"] is not None
-        has_station = self.settings["weather"]["noaa_station_id"] is not None
-        has_location = "noaa_station_lat" in self.settings["weather"].keys()
-
-        # Only look up noaa station info if key is already present.
-        if has_key:
-            if (has_station and not has_location) or update_weather_station:
-                print("Adding NOAA station location to settings.")
-                self.get_weather_station_location()
-
-            # get the url for weather forecasts at the lat,lng of the station
-            if (
-                has_station
-                and "noaa_forecast_url" not in self.settings["weather"].keys()
-            ) or update_weather_station:
-                print("Adding NOAA forecast url to settings.")
-                self.get_weather_forecast_url()
-
-        # Check if transaction columns are present in planner, then write to settings
-        transaction_columns = ["time_column", "product_column", "quantity_column"]
-        for col in transaction_columns:
-            # If the column value isn't None, use that
-            if hasattr(self, col) and getattr(self, col) is not None:
-                self.settings[col] = getattr(self, col)
-
-            # If column present in settings, but not in the planner, move them to the planner
-            if (
-                getattr(self, col) is None
-                and self.settings["transactions"][col] is not None
-            ):
-                setattr(self, col, self.settings[col])
-        # If the columns are specified specifically when the planner object is created,
-        # that overwrites the values in the settings file.
-
-        with open(settings_path, "w") as file:
-            json.dump(self.settings, file, indent=4)
+        self.filehandler.dict_to_file(self.settings, self.settings_path)
 
     ###########- METADATA METHODS -###########
 
-    def generate_daily_history_metadata(self, load_from_file=False):
+    def generate_daily_history_metadata(self, load_from_file=False, write_csv=True):
         """Creates a dataframe of features for each date in the transaction history.
 
         Columns are ['date', 'day_of_week'] if no weather API info is included, and
@@ -377,12 +348,11 @@ class Planner:
         Returns:
             daily_history_metadata (pd.DataFrame)
         """
+        metadata_file_path = os.sep.join(
+            [self.planner_dir, "metadata", "daily_history_metadata.csv"]
+        )
         if load_from_file:
-
             # load from daily_history_metadata.csv
-            metadata_file_path = os.sep.join(
-                [self.planner_dir, "metadata", "daily_history_metadata.csv"]
-            )
             if os.path.exists(metadata_file_path):
                 print("Loading history metadata from: " + metadata_file_path)
                 self.daily_history_metadata = pd.read_csv(
@@ -390,7 +360,7 @@ class Planner:
                 )
             else:
                 print(
-                    f"file path: daily_history_metadata.csv isn't in {os.path.join(self.planner_dir, 'history')}."
+                    f"file path: daily_history_metadata.csv isn't in {os.path.join(self.planner_dir, 'metadata')}."
                 )
                 print(
                     "Setting load_from_file=False will get historical weather data for dates (if noaa api key provided.)"
@@ -407,19 +377,28 @@ class Planner:
                 )
         # generate the daily summaries directly from the transactions and the weather history API
         else:
-            history_dates = pd.to_datetime(
-                pd.Series(self.transactions["timestamp"].dt.date.unique(), name="date")
-            ).sort_values()
-            dates = history_dates.to_frame()
+            # Get the dates listed transactions and create day of week metadata from them.
+            dates = pd.to_datetime(self.transactions["date"])
+            dates = pd.Series(dates.unique(), name="date")
+            dates = dates.to_frame()
             dates = dates.sort_values(by="date")
             dates["day_of_week"] = dates["date"].dt.strftime("%a")
 
-            if self.settings["weather"]["noaa_api_key"] is not None:
+            # Add the weather metadata if added to the planner
+            if hasattr(self, "weather"):
                 start_date = dates.head(1)["date"].dt.strftime("%Y-%m-%d").values[0]
                 end_date = dates.tail(1)["date"].dt.strftime("%Y-%m-%d").values[0]
-                weather = self.get_weather_history(start_date, end_date)
+                station_id = self.settings["weather"]["station"]["id"]
+                weather = self.weather.get_weather_history(
+                    start_date, end_date, station_id
+                )
                 dates = dates.merge(weather, on="date")
             self.daily_history_metadata = dates
+
+        if write_csv:
+            self.daily_history_metadata.to_csv(metadata_file_path, index=False)
+
+        #         self.daily_history_metadata['date'] = self.daily_history_metadata.dt.date
         return self.daily_history_metadata
 
     def generate_daily_forecast_metadata(self):
@@ -444,13 +423,16 @@ class Planner:
         dates["day_of_week"] = dates["date"].dt.strftime("%a")
 
         # Get the forecast at the location of the NOAA station
-        if "noaa_forecast_url" in self.settings["weather"].keys():
-            forecast = self.get_weather_forecast()
+        if hasattr(self, "weather"):
+            forecast_url = self.settings["weather"]["forecast_url"]
+            forecast = self.weather.get_weather_forecast(forecast_url)
             dates = dates.merge(forecast, on="date")
 
-        # Only provide a forecast for columns present in the history
-        history_columns = self.daily_history_metadata.columns
-        self.daily_forecast_metadata = dates[history_columns]
+        # Only provide a forecast for columns present in the history, if present
+        if hasattr(self, "daily_history_metadata"):
+            history_columns = self.daily_history_metadata.columns
+            dates = dates[history_columns]
+        self.daily_forecast_metadata = dates
         return self.daily_forecast_metadata
 
     ###########- PREDICTION METHODS -###########
@@ -575,11 +557,12 @@ class Planner:
             forecasts.append(forecast)
 
         # combine all product forecasts
+        current_date = str(date.today())
         self.forecast_production = pd.concat(forecasts)
         if sort_by_date:
             self.forecast_production = self.forecast_production.sort_values(by="date")
         self.forecast_production.to_csv(
-            os.sep.join([self.planner_dir, "forecast", "forecast_production.csv"]),
+            os.sep.join([self.planner_dir, "forecast", f"{current_date}_forecast.csv"]),
             index=False,
         )
         return self.forecast_production
@@ -891,7 +874,7 @@ class Planner:
         start_hour=6,
         end_hour=18,
         stockout_prob=0.5,
-        tz="US/Eastern",
+        tz=None,
         write_csv=False,
     ):
         """Top level wrapper for whole simulation process.
@@ -913,7 +896,7 @@ class Planner:
                 90% of the time. 0.9 means stockouts occur on 90% of days.
             tz (str): The descriptor for the time zone for the timstamps, which are time zone aware.
             write_csv (bool): True writes daily_history_metadata, simulated_demand_history, and transactions to csv in folder
-                ...concha/planners/[planner_name]/
+                ...concha_planners/[planner_name]/metadata
         """
 
         # Simulates weather over a series of of num_days
@@ -923,6 +906,16 @@ class Planner:
         self.simulate_daily_demand(
             demand_mean=demand_mean, demand_std=demand_std, num_products=num_products
         )
+
+        # The tricky thing with timezones is that pandas won't convert timestamps in the transactions unless they
+        # are all the same timezone. So these simulated transactions should be whatever is set as a kwarg,
+        # otherwise it should match whatever the importer location is listed as
+        # and then finally "US/Eastern" as a default
+        if tz is None:
+            if "location" in self.settings:
+                tz = self.settings["location"]["timezone"]
+            else:
+                tz = "US/Eastern"
 
         # Turns the demand numbers into potential transactions and actual ones limited by supply.
         self.simulate_transactions(
@@ -947,7 +940,7 @@ class Planner:
         """
         dates = pd.date_range(end=pd.Timestamp.today(), periods=num_days, freq="D")
         daily_metadata = []
-        for date in dates:
+        for dte in dates:
             # tmin is a Gaussian rv centered on 60.
             tmin = int(rgen.normal(loc=60, scale=15))
 
@@ -961,8 +954,8 @@ class Planner:
             snow = rgen.random() > 0.95
             daily_metadata.append(
                 {
-                    "date": date.date(),
-                    "day_of_week": date.strftime("%a"),
+                    "date": dte.date(),
+                    "day_of_week": dte.strftime("%a"),
                     "tmin": tmin,
                     "tmax": tmax,
                     "prcp": prcp,
@@ -1032,6 +1025,7 @@ class Planner:
                     )
 
                 # combine effects and reduced demand by 10% for rain, 20% for snow, and 30% if both occur.
+                # "temp_effect" is short for "temperature_effect".
                 temp_effect = max(
                     temp_effect - int(row["prcp"]) * 0.1 - int(row["snow"]) * 0.2, 0.1
                 )
@@ -1096,10 +1090,15 @@ class Planner:
         transactions = []
         updated_demand = []
         for idx, row in self.simulated_demand_history.iterrows():
-            # start hour for the given day
-            start = pd.to_datetime(row["date"]).tz_localize(tz=tz) + pd.Timedelta(
-                f"{start_hour} hours"
-            )
+
+            # start_naive is a tz naive time at the start hour of business
+            start_naive = row["date"] + timedelta(hours=start_hour)
+            localtz = pytz.timezone(tz)
+            utc = pytz.utc
+
+            # Start is set the start hour at local time, then as UTC.
+            # This is essential to account for daylight savings.
+            start = localtz.localize(start_naive).astimezone(utc)
             # find the expected transactions per min given the demand, and prevent divide by zeros with +0.01
             lmda = (row["demand"] + 0.01) / minutes_per_day
 
@@ -1124,10 +1123,22 @@ class Planner:
                 start + pd.Timedelta(f"{i} minutes").round(freq="S") for i in spacings
             ]
 
+            times_naive = [
+                start_naive + pd.Timedelta(f"{i} minutes").round(freq="S")
+                for i in spacings
+            ]
+
             # make the dataframe and add in the product and quantity columns
-            prod_trans = pd.DataFrame({"timestamp": times})
+            prod_trans = pd.DataFrame({"timestamp": times, "local_ts": times_naive})
+            prod_trans["date"] = prod_trans["local_ts"].apply(lambda x: x.date())
+            prod_trans["date"] = pd.to_datetime(prod_trans["date"])
+            prod_trans["minute"] = prod_trans.apply(
+                lambda xrow: xrow["local_ts"].hour * 60 + xrow["local_ts"].minute,
+                axis=1,
+            )
             prod_trans["product"] = row["product"]
             prod_trans["quantity"] = 1
+
             transactions.append(prod_trans)
             updated_demand.append(row)
 
@@ -1143,6 +1154,7 @@ class Planner:
                 os.sep.join(
                     [self.planner_dir, "metadata", "simulated_transactions.csv"]
                 ),
+                columns=["timestamp", "product", "quantity"],
                 index=False,
             )
             self.simulated_demand_history.to_csv(
@@ -1153,199 +1165,7 @@ class Planner:
             )
         return transactions
 
-    ###########- WEATHER METHODS -###########
-
-    def get_weather_history(self, start_date, end_date):
-        """Looks up the weather within a date range at the planner's station_id
-
-        Args:
-            start_date (str): Format from: ['date'].dt.strftime('%Y-%m-%d'), so like '2020-07-15'
-            end_date (str): End date of range in which to find weather history.
-
-        Return:
-            weather_history (pd.DataFrame): fields: ['date', 'tmin', 'tmax'] and possibly ['prcp', 'snow']
-
-        """
-
-        # Assemble actual request to NOAA. "GHCND" is the Global Historical Climate Network Database
-        station_id = self.settings["weather"]["noaa_station_id"]
-        api_key = self.settings["weather"]["noaa_api_key"]
-        headers = {"Accept": "application/json", "token": api_key}
-        url = "https://www.ncdc.noaa.gov/cdo-web/api/v2/data"
-        params = {
-            "stationid": station_id,
-            "startdate": start_date,
-            "enddate": end_date,
-            "datasetid": "GHCND",
-            "units": "standard",
-            "datatypeid": ["PRCP", "TMIN", "TMAX", "SNOW"],
-            "sortorder": "DESC",
-            "offset": 0,
-            "limit": 1000,
-        }
-
-        # Loop through requests to the API if more than 1000 results are required.
-        records = []
-        for i in range(10):
-            req = requests.get(url, headers=headers, params=params)
-            res = req.json()
-            recs = pd.DataFrame(res["results"])
-            records.append(recs)
-            count = res["metadata"]["resultset"]["count"]
-            if count < params["limit"]:
-                break
-            else:
-                params["offset"] += params["limit"]
-        records = pd.concat(records)
-
-        # Format the results and turn precipitation and snow levels into just yes/no booleans
-        records["datatype"] = records["datatype"].str.lower()
-        records = records.pivot(
-            index="date", columns="datatype", values="value"
-        ).reset_index()
-        records["date"] = pd.to_datetime(records["date"])
-        use_fields = ["date", "tmin", "tmax"]
-        for field in ["prcp", "snow"]:
-            if field in records.columns:
-                records[field] = records[field].apply(lambda x: x > 0)
-                use_fields.append(field)
-        return records[use_fields]
-
-    def get_weather_station_location(self):
-        """Asks the NOAA API for the coordinates of the specified station.
-
-        The lat and lng is needed to find out what url to use to find weather forecasts
-        at that location.
-        """
-        station_id = self.settings["weather"]["noaa_station_id"]
-        api_key = self.settings["weather"]["noaa_api_key"]
-        headers = {"Accept": "application/json", "token": api_key}
-        url = f"https://www.ncdc.noaa.gov/cdo-web/api/v2/stations/{station_id}"
-        req = requests.get(url, headers=headers)
-        res = req.json()
-        self.settings["weather"]["noaa_station_name"] = res["name"]
-        self.settings["weather"]["noaa_station_lat"] = res["latitude"]
-        self.settings["weather"]["noaa_station_lng"] = res["longitude"]
-        return res
-
-    def get_weather_forecast_url(self):
-        """Asks the forecasting API what url to use for the station's location"""
-
-        url = f"https://api.weather.gov/points/{self.settings['weather']['noaa_station_lat']},{self.settings['weather']['noaa_station_lng']}"
-        headers = {"User-Agent": "project concha python application"}
-        req = requests.get(url, headers=headers)
-        res = req.json()
-        forecast_url = res["properties"]["forecast"]
-        self.settings["weather"]["noaa_forecast_url"] = forecast_url
-        return res
-
-    def get_weather_forecast(self):
-        """Finds the weathe forecast at the grid covering the station location.
-
-        The forecast API gives a day and an overnight forecast. This parses the min
-        temperature from the *overnight/morning of* instead of that night. This was done
-        because the morning before temperature has potentially more effect on demand than
-        the min temperature after the store has closed.
-        """
-
-        # The forecast api is weird and sometimes won't respond for the first minute or so.
-        url = self.settings["weather"]["noaa_forecast_url"]
-        headers = {"User-Agent": "project concha python application"}
-        req = requests.get(url, headers=headers)
-
-        # This try-except warns the user to just try again, that it's probably just the API being weird.
-        try:
-            req.raise_for_status()
-        except requests.exceptions.HTTPError as err:
-            print(
-                f"""The NOAA forecast site is weird and sometimes doesn't respond. Try the url in your browser,
-                Then you get a respose, you should be able to run this again and get the forecast. URL:
-                {url}"""
-            )
-            print(err)
-
-        res = req.json()
-        forecast = pd.DataFrame(res["properties"]["periods"])
-
-        # Many fields are returned, this limits them to the ones needed.
-        forecast = forecast[
-            ["startTime", "endTime", "isDaytime", "temperature", "shortForecast"]
-        ]
-        forecast["endTime"] = pd.to_datetime(forecast["endTime"])
-
-        # Date is chosen such that the previous overnight temp, and day temp are assigned to the date
-        forecast["date"] = forecast["endTime"].dt.date
-
-        # String search used to figure out of rain is in the forecast
-        forecast["prcp"] = forecast["shortForecast"].str.contains(
-            "showers|rain|thunderstorms", flags=re.IGNORECASE, regex=True
-        )
-        forecast["snow"] = forecast["shortForecast"].str.contains(
-            "snow|blizzard|flurries", flags=re.IGNORECASE, regex=True
-        )
-
-        # Because two values exist for each date, the they are aggregated to find one value for each date.
-        by_date = forecast.groupby("date").agg(
-            tmin=pd.NamedAgg(column="temperature", aggfunc="min"),
-            tmax=pd.NamedAgg(column="temperature", aggfunc="max"),
-            count=pd.NamedAgg(column="temperature", aggfunc="count"),
-            prcp=pd.NamedAgg(column="prcp", aggfunc="any"),
-            snow=pd.NamedAgg(column="snow", aggfunc="any"),
-        )
-
-        # Only include dates with two values
-        by_date = by_date[by_date["count"] > 1].drop(columns="count").reset_index()
-        by_date[["tmin", "tmax"]] = by_date[["tmin", "tmax"]].astype(float)
-        by_date["date"] = pd.to_datetime(by_date["date"])
-
-        return by_date
-
         ###########- Getter/Setters -###########
-
-    def noaa_key(self, *args):
-        """Gets/sets the noaa_api_key
-
-        Args:
-            api_key (str): If included, sets the noaa_api_key attribute
-                to the key, then writes the settings file with the key.
-
-        Returns:
-            api_key (str): If no arg is provided, the current value
-                for the noaa_api_key is returned.
-        """
-        if len(args) == 0:
-            key = self.settings["weather"]["noaa_api_key"]
-            if key is None:
-                print("No key set.")
-            return key
-        else:
-            self.noaa_api_key = args[0]
-            self.update_settings()
-            print("NOAA api key set.")
-            return
-
-    def noaa_station(self, *args):
-        """Gets/sets the noaa_station_id
-
-        Args:
-            station_id (str): If included, sets the noaa_station_id attribute,
-                then writes the settings file with the station. This also kicks off
-                the process of finding the station location and forecast url.
-
-        Returns:
-            station_id (str): If no arg is provided, the current value
-                for the noaa_station_id is returned.
-        """
-        if len(args) == 0:
-            station_id = self.settings["weather"]["noaa_station_id"]
-            if station_id is None:
-                print("No station set.")
-            return station_id
-        else:
-            self.noaa_station_id = args[0]
-            self.update_settings()
-            print("NOAA station set.")
-            return
 
     def product(self, *args, batch_size=None, batch_cost=None, unit_sale_price=None):
         """Gets/sets a single product, or returns a list of current products.
@@ -1366,19 +1186,120 @@ class Planner:
                 kwargs, the new settings are set and saved to the settings json.
         """
         if len(args) == 0:
-            return list(self.products.keys())
+            return list(self.settings["product"].keys())
         else:
             product = args[0]
-            if product not in self.products:
+            if product not in self.settings["product"]:
                 print("That's not one of the products in the planner")
             elif batch_size is None:
                 return self.settings["product"][product]
             else:
                 self.update_settings()
-                self.settings["product"][product]["batch_size"] = batch_size
-                self.settings["product"][product]["batch_cost"] = batch_cost
-                self.settings["product"][product]["unit_sale_price"] = unit_sale_price
-                settings_path = os.path.join(self.planner_dir, "planner_settings.json")
-                with open(settings_path, "w+") as file:
-                    json.dump(self.settings, file, indent=4)
-                self.setup_products()
+                self.settings["product"][product]["batch_size"] = int(batch_size)
+                self.settings["product"][product]["batch_cost"] = float(batch_cost)
+                self.settings["product"][product]["unit_sale_price"] = float(
+                    unit_sale_price
+                )
+                self.filehandler.dict_to_file(self.settings, self.settings_path)
+
+    ########### Importers Interfaces #############
+
+    def set_importer(self, importer):
+        """Set the sales history importer.
+
+        Args:
+            importer (importer object): At this point only the Square class is implemented.
+            The importer name and type are stored in the planner settings. A new importer
+            is instantiated for the planner object when the planner object is created using
+            the name specified.
+        """
+        self.importer = importer
+        self.settings["importer"] = {
+            "name": importer.settings["name"],
+            "type": importer.settings["type"],
+        }
+        # Set these becuase an importer will be used. Not some other csv with differnt names.
+        self.settings["transactions"] = {
+            "time_column": "timestamp",
+            "product_column": "product",
+            "quantity_column": "quantity",
+        }
+        self.filehandler.dict_to_file(self.settings, self.settings_path)
+
+    def set_location(self, location_name):
+        """Set the location of the planner from the existing planners on the Square account.
+
+        Args:
+            location_name (str): The "name" of the location from all the locations extant on the
+                Square account.
+
+        Returns:
+            location (dict): Metadata for the cafe/restaurant location taken from the
+                square locations API.
+        """
+
+        # Check that an importer is attached.
+        if not hasattr(self, "importer"):
+            print("This method requires the planner to have an importer attached")
+        else:
+            # Get the specific location settings from the locations dict
+            location = self.importer.settings["locations"][location_name]
+
+            # Because the location is being set. Assume we need to pull as much
+            # data as possible, but within 6 months because pre-pandemic numbers
+            # won't make sense now.
+            half_year_ago = datetime.now(timezone.utc) - timedelta(days=180)
+            location["last_timestamp"] = half_year_ago.isoformat()
+            self.settings["location"] = location
+
+            # Set the 'location' in the attached planner settings.
+            self.filehandler.dict_to_file(self.settings, self.settings_path)
+            print(f"location for {self.planner_name} set to {location_name}.")
+            return location
+
+    def set_weather_agent(self, agent):
+        """Specifies a named weather agent and saves it in the planner's settings.
+
+        Args:
+            agent (concha.weather.NOAA class object): The the weather agent which may or may
+                not have an api_key set yet.
+        """
+
+        # Save the information needed to instantiate the weather agent when the planner object is created.
+        self.settings["weather"] = {
+            "name": agent.settings["name"],
+            "type": agent.settings["type"],
+        }
+        self.weather = agent
+
+        # Save the settings to file.
+        self.filehandler.dict_to_file(self.settings, self.settings_path)
+
+    def set_weather_station(self, lat=None, lng=None):
+        """Given a set of coordinates, find the nearest best weather station, then set for the planner.
+
+        If no lat/lng are given, grab one from the attached planner square_location if set.
+
+        Args:
+            lat (float): Latitude of the store location.
+            lng (float): Longitude of the store location
+        """
+
+        # If no coordinates are given, get on from the location assigned to the planner
+        # from the square importer.
+        if lat is None:
+            if "location" in self.settings:
+                lat, lng = (
+                    self.settings["location"]["lat"],
+                    self.settings["location"]["lng"],
+                )
+
+        # Get the nearest station
+        station = self.weather.get_station(lat=lat, lng=lng)
+        self.settings["weather"]["forecast_url"] = self.weather.get_forecast_url(
+            station
+        )
+        self.settings["weather"]["station"] = station
+
+        # Write the station stuff to file
+        self.filehandler.dict_to_file(self.settings, self.settings_path)

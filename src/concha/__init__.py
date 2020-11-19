@@ -2,6 +2,7 @@
 from .product import *
 from .model import *
 from .planner import Planner
+from .environment import FileHandler
 from pkg_resources import get_distribution, DistributionNotFound
 
 try:
