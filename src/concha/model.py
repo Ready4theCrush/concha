@@ -261,7 +261,7 @@ class ProfitMaximizer(BaseEstimator, RegressorMixin, DeepLearningEstimator):
         else:
             earlystopping_monitor = "loss"
 
-        # callback is check if the model should stop early
+        # callback checks if the model should stop early
         callback = EarlyStopping(monitor=earlystopping_monitor, patience=7)
 
         # If each fit needs to be from scratch, reconstruct and recompile the model
@@ -291,9 +291,9 @@ class ProfitMaximizer(BaseEstimator, RegressorMixin, DeepLearningEstimator):
         if self.round_to_batch:
             return self
 
-        ################ This part only for round_to_batch = False #########################
+        ################ This part only for round_to_batch == False #########################
 
-        # If round_to_batch = False, a model is trained to predict the delta in profit if we rounded up.
+        # If round_to_batch == False, a model is trained to predict the delta in profit if we rounded up.
         disc_target = self.optimal_rounding_fn_(y_original, regr_prediction)
 
         # find how how far the regression output is between batch sizes
