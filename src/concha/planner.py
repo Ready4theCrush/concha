@@ -1107,6 +1107,9 @@ class Planner:
             spacings = rgen.exponential(
                 scale=(1 / lmda), size=int(row["demand"] * 1.5)
             ).cumsum()
+            
+            # Ensure the sign of all the spacings is positive to prevent "leading negative sign" errors.
+            spacings = np.absolute(spacings)
 
             # limit the transactions that occur within business hours
             filt_arr = spacings < minutes_per_day
