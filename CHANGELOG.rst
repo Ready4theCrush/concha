@@ -2,6 +2,14 @@
 Changelog
 =========
 
+Version 0.3.0
+===========
+
+- Create environment class for handling filepaths for handling running on Google Drive.
+- Square importer implemented to allow user's to go through Oath flow to get access to
+    their own accounts.
+- Weather NOAA class created as weather agent.
+
 Version 0.2.1
 ===========
 
