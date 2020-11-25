@@ -7,5 +7,11 @@ dependencies:
   - tensorflow
   - pandas
   - seaborn
-  - python=3.7
+  - python
   - statsmodels
+  - squareup
+  - scipy
+  - pytz
+  - geocoder
+  - requests
+
