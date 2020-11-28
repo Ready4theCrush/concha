@@ -2,6 +2,10 @@
 Changelog
 =========
 
+Version 0.3.2
+===========
+- Add geocoder to dependencies
+- Fix Readme colab references
 
 Version 0.3.1
 ===========

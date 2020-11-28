@@ -246,6 +246,7 @@ class Square:
             self.settings["access_token_expiration"] = result.body["expires_at"]
             self.settings["refresh_token"] = result.body["refresh_token"]
             self.filehandler.dict_to_file(self.settings, self.settings_path)
+            self.connect()
         else:
             print(result.errors)
         return result
