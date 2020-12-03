@@ -9,7 +9,7 @@ Cafes, grocery stores, restaurants, donut shops, and panaderias face a fundament
    combined with local weather conditions to learn demand patterns.
    Then it predicts how much to make of each product to maximize profit.
    
-Concha can interface with Square to get the necessary sales history. It takes about 10 minutes to set up.
+Concha can interface with Square to get the sales history. It takes about 10 minutes to set up.
    
 ## Try it out
 
