@@ -2,6 +2,15 @@
 Changelog
 =========
 
+Version 0.3.4
+===========
+- Update language of demo notebooks.
+- Add printed confirmation when NOAA API key/token is set.
+
+Version 0.3.3
+===========
+- Fix variable reference in 03_everyday_use notebook.
+
 Version 0.3.2
 ===========
 - Add geocoder to dependencies

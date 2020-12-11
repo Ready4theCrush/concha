@@ -42,6 +42,7 @@ class NOAA:
         """Setter for the NOAA api key."""
         self.settings["api_key"] = api_key
         self.filehandler.dict_to_file(self.settings, self.settings_path)
+        print("NOAA API key saved.")
 
     def get_weather_history(self, start_date, end_date, station_id):
         """Looks up the weather within a date range at the station.
