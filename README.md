@@ -14,9 +14,11 @@ Concha can interface with Square to get the sales history. It takes about 10 min
 ## Try it out
 
 You can run concha entirely on Google Colab (a free deep learning platform).
-[Run a concha simulation in a Colab notebook](https://colab.research.google.com/github/Ready4theCrush/concha/blob/master/notebooks/01_run_a_simulation.ipynb) A "notebook" is a bunch of code blocks you can run one by one by clicking the play button in the upper left corner (or by typing CTRL-ENTER).
+[Run a concha simulation in a Colab notebook](https://colab.research.google.com/github/Ready4theCrush/concha/blob/master/notebooks/01_run_a_simulation.ipynb) A Colab "notebook" is a bunch of code blocks you can run one by one by clicking the play button in the upper left corner (or by typing CTRL-ENTER).
 
 If you want to do more than run simulations and use it to predict how much to make/order for each day, you can run it from your Google Drive. Concha will save a file of predictions to your drive that you can open up with Google Sheets.
+
+[This Medium article is a complete guide to setting up Concha and running it on Colab.](https://medium.com/conchaml/machine-learning-for-how-many-donuts-bagels-etc-to-make-each-day-15e41a1eb86f)
 
 ## Making Predictions from Your Data
 

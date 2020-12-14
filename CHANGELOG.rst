@@ -2,6 +2,10 @@
 Changelog
 =========
 
+Version 0.3.5
+===========
+- Add link to guide to setup and everyday use published on Medium.
+
 Version 0.3.4
 ===========
 - Update language of demo notebooks.
